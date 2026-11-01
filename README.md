@@ -80,38 +80,10 @@ Tip: type `hm ` then drag a video into the window to paste its path.
 |---|---|
 | `--out DIR` | Output folder (default: next to the file, or Downloads for links) |
 | `--video` | For links: also download the video and output a full music-free video |
-| `--browser NAME` | For links: use login cookies from a browser (`firefox`, `brave`, …). See [Login-only sites](#login-only-sites-instagram-facebook-) |
-| `--cookies FILE` | For links: use login cookies from a `cookies.txt` file |
 | `--fresh` | Ignore HaramMute's cache and reprocess |
 | `--install-sendto` / `--uninstall-sendto` | Add or remove the right-click "Send to" entry |
 | `--uninstall` | Remove hm completely |
 | `--version` | Show the version |
-
-### Login-only sites (Instagram, Facebook, …)
-
-Instagram and some other sites only serve videos to logged-in users. If you see `login required`, give `hm` your login cookies in one of two ways:
-
-**Option A: Firefox or Brave.** Log in to the site in Firefox (or Brave), then:
-
-```bat
-hm "https://www.instagram.com/reel/XXXX/" --video --browser firefox
-```
-
-**Option B: a cookies.txt file (works with Chrome/Edge).** Newer Chrome and Edge encrypt their cookies so tools can't read them directly. Instead, install a cookie-export extension such as *Get cookies.txt LOCALLY*, open the site while logged in, export, and save the file somewhere safe. Then:
-
-```bat
-hm "https://www.instagram.com/reel/XXXX/" --video --cookies "C:\Users\you\cookies\instagram.txt"
-```
-
-To avoid typing it every time, set a default once (then open a new terminal):
-
-```bat
-setx HM_BROWSER firefox
-:: or
-setx HM_COOKIES "C:\Users\you\cookies\instagram.txt"
-```
-
-> A cookies file is as good as your password for that site. Keep it private and never commit or share it.
 
 ## How it works
 
@@ -134,7 +106,7 @@ For local files, `hm.py` briefly serves the file on a random `127.0.0.1` port so
   setx MUSIC_REMOVER_BROWSER_FOR_COOKIES brave
   ```
   then quit and restart HaramMute.
-- **Login-only videos** (Instagram, private posts): see [Login-only sites](#login-only-sites-instagram-facebook-).
+- **Private/login-only videos** need the browser you're logged into to be readable (close Chrome while running, since it locks its cookie file).
 
 ## Troubleshooting
 
@@ -143,7 +115,6 @@ For local files, `hm.py` briefly serves the file on a random `127.0.0.1` port so
 | `HaramMute engine not reachable` | Start the HaramMute app (tray icon), then retry |
 | `file not found` | Check the path; the tool lists similarly named files to help. The extension can be left off |
 | `HaramMute API 422` | The input isn't a valid file or `http(s)` link |
-| `login required` / `rate-limit reached` | See [Login-only sites](#login-only-sites-instagram-facebook-) |
 | `no progress for 15 min` | Check `%LOCALAPPDATA%\HaramMute\logs\tray_launcher.log` |
 
 ## License
