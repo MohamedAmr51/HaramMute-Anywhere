@@ -6,6 +6,8 @@ The HaramMute browser extension only works on YouTube. The desktop app behind it
 
 > **Not affiliated with HaramMute.** This is an independent helper script. It contains none of HaramMute's code or models. You need the official HaramMute desktop app installed for it to work.
 
+<br>
+
 ## What it does
 
 | Input | Output |
@@ -17,10 +19,14 @@ The HaramMute browser extension only works on YouTube. The desktop app behind it
 
 Your original files are never modified.
 
+<br>
+
 ## Requirements
 
 - Windows with the **HaramMute desktop app** installed and running (tray icon visible)
 - That's it — the script uses HaramMute's own bundled Python, ffmpeg and yt-dlp. No `pip install` needed.
+
+<br>
 
 ## Install
 
@@ -45,6 +51,8 @@ hm --uninstall
 ```
 
 This removes the `hm` command, the Send to entry and the install folder. HaramMute itself is not touched.
+
+<br>
 
 ## Usage
 
@@ -85,6 +93,8 @@ Tip: type `hm ` then drag a video into the window to paste its path.
 | `--uninstall` | Remove hm completely |
 | `--version` | Show the version |
 
+<br>
+
 ## How it works
 
 ```
@@ -98,6 +108,8 @@ hm.py ◀──GET vocals.mp3────────┘
 
 For local files, `hm.py` briefly serves the file on a random `127.0.0.1` port so the engine can "download" it like any link. Nothing leaves your machine.
 
+<br>
+
 ## Notes
 
 - **Instagram and Facebook aren't supported yet.** They require a logged-in session, which HaramMute can't get from newer Chrome/Edge. Support is planned.
@@ -109,6 +121,8 @@ For local files, `hm.py` briefly serves the file on a random `127.0.0.1` port so
   then quit and restart HaramMute.
 - **Private/login-only videos** need the browser you're logged into to be readable (close Chrome while running, since it locks its cookie file).
 
+<br>
+
 ## Troubleshooting
 
 | Message | Fix |
@@ -117,6 +131,8 @@ For local files, `hm.py` briefly serves the file on a random `127.0.0.1` port so
 | `file not found` | Check the path; the tool lists similarly named files to help. The extension can be left off |
 | `HaramMute API 422` | The input isn't a valid file or `http(s)` link |
 | `no progress for 15 min` | Check `%LOCALAPPDATA%\HaramMute\logs\tray_launcher.log` |
+
+<br>
 
 ## License
 
