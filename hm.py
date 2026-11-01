@@ -2,11 +2,13 @@
 """
 hm.py - Use the HaramMute desktop engine on anything, not just YouTube in the browser.
 
-  python hm.py "https://www.tiktok.com/@user/video/123"      -> vocals.mp3 (music removed)
-  python hm.py "https://x.com/user/status/123" --video       -> video with music removed
-  python hm.py "D:\\Lectures\\talk.mp4"                       -> talk.nomusic.mp4
-  python hm.py a.mp4 b.mkv "https://vimeo.com/123" --out D:\\Clean
-  python hm.py --install-sendto                               -> adds "HaramMute (remove music)" to right-click > Send to
+  hm "https://www.tiktok.com/@user/video/123"      -> vocals.mp3 (music removed)
+  hm "https://x.com/user/status/123" --video       -> video with music removed
+  hm "D:\\Lectures\\talk.mp4"                       -> talk.nomusic.mp4
+  hm a.mp4 b.mkv "https://vimeo.com/123" --out D:\\Clean
+  hm --install-sendto                               -> adds "HaramMute (remove music)" to right-click > Send to
+
+Install with install.ps1 (adds the `hm` command and the Send to entry).
 
 Needs the HaramMute tray app running (it serves the API on 127.0.0.1:8765).
 Pure standard library: runs on HaramMute's bundled Python or any Python 3.8+.
@@ -26,6 +28,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+__version__ = "1.1.0"
 
 HM_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "HaramMute"
 API = os.environ.get("HARAMMUTE_API", "http://127.0.0.1:{}".format(
@@ -236,12 +240,46 @@ def process(item, out_dir: Path, want_video: bool, fresh: bool):
     return out
 
 
+SENDTO_NAME = "HaramMute (remove music)"
+
+
+def _sendto_dir():
+    return Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo"
+
+
 def install_sendto():
-    sendto = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "SendTo"
+    """Add a right-click > Send to entry: a .lnk with HaramMute's icon pointing at a small wrapper."""
+    script = Path(__file__).resolve()
     py = HM_PYTHON if HM_PYTHON.exists() else Path(sys.executable)
-    cmd = sendto / "HaramMute (remove music).cmd"
-    cmd.write_text(f'@echo off\r\n"{py}" "{Path(__file__).resolve()}" %*\r\npause\r\n', encoding="utf-8")
-    print(f"Installed: right-click any video > Send to > HaramMute (remove music)\n  ({cmd})")
+    wrapper = script.with_name("hm-sendto.cmd")
+    wrapper.write_text(f'@echo off\r\ntitle HaramMute - removing music\r\n"{py}" "{script}" %*\r\necho.\r\npause\r\n',
+                       encoding="utf-8")
+
+    sendto = _sendto_dir()
+    old_cmd = sendto / f"{SENDTO_NAME}.cmd"          # from older versions of this script
+    old_cmd.unlink(missing_ok=True)
+    lnk = sendto / f"{SENDTO_NAME}.lnk"
+    icon = HM_DIR / "icon.ico"
+    q = lambda p: str(p).replace("'", "''")          # PowerShell single-quote escaping
+    ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{q(lnk)}');"
+          f"$s.TargetPath='{q(wrapper)}';"
+          f"$s.WorkingDirectory='{q(script.parent)}';"
+          + (f"$s.IconLocation='{q(icon)},0';" if icon.exists() else "")
+          + "$s.Description='Remove background music with HaramMute';$s.Save()")
+    try:
+        subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+                       check=True, capture_output=True)
+        print(f"Installed: right-click any video > Send to > {SENDTO_NAME}")
+    except (OSError, subprocess.CalledProcessError):
+        shutil.copyfile(wrapper, old_cmd)           # fallback: plain .cmd entry
+        print(f"Installed (basic): right-click any video > Send to > {SENDTO_NAME}.cmd")
+
+
+def uninstall_sendto():
+    for ext in (".lnk", ".cmd"):
+        (_sendto_dir() / f"{SENDTO_NAME}{ext}").unlink(missing_ok=True)
+    Path(__file__).resolve().with_name("hm-sendto.cmd").unlink(missing_ok=True)
+    print("Removed the Send to entry.")
 
 
 def main():
@@ -255,10 +293,14 @@ def main():
     ap.add_argument("--video", action="store_true", help="for URLs: also download the video and output a full music-free video")
     ap.add_argument("--fresh", action="store_true", help="ignore HaramMute's cache and reprocess")
     ap.add_argument("--install-sendto", action="store_true", help="add a right-click 'Send to' entry (Windows)")
+    ap.add_argument("--uninstall-sendto", action="store_true", help="remove the right-click 'Send to' entry")
+    ap.add_argument("--version", action="version", version=f"hm {__version__}")
     a = ap.parse_args()
 
     if a.install_sendto:
         return install_sendto()
+    if a.uninstall_sendto:
+        return uninstall_sendto()
     if not a.inputs:
         ap.print_help()
         return

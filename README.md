@@ -24,46 +24,55 @@ Your original files are never modified.
 
 ## Install
 
-1. Download [`hm.py`](hm.py).
-2. Put it in an `extras` folder inside the HaramMute install folder:
-   ```
-   %LOCALAPPDATA%\HaramMute\extras\hm.py
-   ```
-   > Keep a copy elsewhere too — a HaramMute update or uninstall could remove that folder.
+Open **PowerShell** and paste:
+
+```powershell
+irm https://raw.githubusercontent.com/MohamedAmr51/harammute-anywhere/main/install.ps1 | iex
+```
+
+Or [download the repo as ZIP](https://github.com/MohamedAmr51/harammute-anywhere/archive/refs/heads/main.zip), extract it, and double-click **`install.bat`**.
+
+The installer:
+- checks that the HaramMute desktop app is installed
+- installs to `%LOCALAPPDATA%\HaramMute-Anywhere` (separate from HaramMute, so its updates won't remove it)
+- adds an `hm` command you can run from any terminal
+- adds **HaramMute (remove music)** to the right-click **Send to** menu
+
+### Uninstall
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\HaramMute-Anywhere\uninstall.ps1"
+```
+
+HaramMute itself is not touched.
 
 ## Usage
 
-Open Command Prompt:
+### Right-click
 
-```bat
-cd /d %LOCALAPPDATA%\HaramMute
-
-:: a local video
-python\python.exe extras\hm.py "D:\Lectures\talk.mp4"
-
-:: a link -> music-free audio
-python\python.exe extras\hm.py "https://www.tiktok.com/@user/video/123"
-
-:: a link -> full music-free video
-python\python.exe extras\hm.py "https://x.com/user/status/123" --video
-
-:: several at once, into a chosen folder
-python\python.exe extras\hm.py a.mp4 b.mkv "https://vimeo.com/123" --out D:\Clean
-```
-
-Tip: type the command up to `extras\hm.py `, then drag a video into the window to paste its path.
-
-### Right-click "Send to"
-
-Run once:
-
-```bat
-python\python.exe extras\hm.py --install-sendto
-```
-
-Then right-click any video → **Send to** → **HaramMute (remove music)**.
+Right-click any video → **Send to** → **HaramMute (remove music)**. A window shows progress, and the music-free copy is saved next to the original.
 
 ![HaramMute in the right-click Send to menu](docs/send-to-menu.png)
+
+### Command line
+
+Open a **new** terminal after installing:
+
+```bat
+:: a local video
+hm "D:\Lectures\talk.mp4"
+
+:: a link -> music-free audio
+hm "https://www.tiktok.com/@user/video/123"
+
+:: a link -> full music-free video
+hm "https://x.com/user/status/123" --video
+
+:: several at once, into a chosen folder
+hm a.mp4 b.mkv "https://vimeo.com/123" --out D:\Clean
+```
+
+Tip: type `hm ` then drag a video into the window to paste its path.
 
 ### Options
 
@@ -72,7 +81,8 @@ Then right-click any video → **Send to** → **HaramMute (remove music)**.
 | `--out DIR` | Output folder (default: next to the file, or Downloads for links) |
 | `--video` | For links: also download the video and output a full music-free video |
 | `--fresh` | Ignore HaramMute's cache and reprocess |
-| `--install-sendto` | Add the right-click "Send to" entry |
+| `--install-sendto` / `--uninstall-sendto` | Add or remove the right-click "Send to" entry |
+| `--version` | Show the version |
 
 ## How it works
 
