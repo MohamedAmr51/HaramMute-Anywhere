@@ -29,7 +29,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 
 HM_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "HaramMute"
 API = os.environ.get("HARAMMUTE_API", "http://127.0.0.1:{}".format(
@@ -163,16 +163,41 @@ def mux(video: Path, vocals: Path, out: Path):
     return out
 
 
-def fetch_video(url, workdir: Path) -> Path:
+def ytdlp_auth(cookies=None, browser=None):
+    """yt-dlp login options: a cookies.txt file, or cookies read from a browser (firefox, brave, ...)."""
+    if cookies:
+        c = Path(str(cookies).strip('"'))
+        if not c.is_file():
+            raise RuntimeError(f"cookies file not found: {c}")
+        return ["--cookies", str(c)]
+    if browser:
+        return ["--cookies-from-browser", browser]
+    return []
+
+
+def fetch_media(url, workdir: Path, want_video: bool, auth: list) -> Path:
+    """Download a link with HaramMute's bundled yt-dlp. Returns the downloaded file."""
     py = str(HM_PYTHON) if HM_PYTHON.exists() else sys.executable
-    tmpl = str(workdir / "src.%(ext)s")
-    subprocess.run([py, "-m", "yt_dlp", "--no-playlist", "-f", "bv*[height<=1080]+ba/b",
-                    "--merge-output-format", "mkv", "--ffmpeg-location", FFMPEG, "-o", tmpl, url], check=True)
-    return next(p for p in workdir.glob("src.*") if p.suffix != ".part")
+    fmt = (["-S", "res:1080,ext:mp4:m4a", "--merge-output-format", "mp4/mkv"] if want_video
+           else ["-f", "bestaudio/best"])
+    cmd = [py, "-m", "yt_dlp", "--no-playlist", "--quiet", "--progress", "--no-warnings",
+           "--ffmpeg-location", FFMPEG, "-o", str(workdir / "%(title).70B [%(id)s].%(ext)s"),
+           *fmt, *auth, url]
+    # progress bar -> stdout (shown live); errors -> stderr (captured so we can report them cleanly)
+    r = subprocess.run(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    print()
+    if r.returncode != 0:
+        errors = [ln.strip() for ln in r.stderr.splitlines() if ln.strip()]
+        last = next((ln for ln in reversed(errors) if ln.startswith("ERROR")), errors[-1] if errors else "")
+        raise RuntimeError(f"Download failed: {last or 'yt-dlp exited with code %d' % r.returncode}")
+    files = [p for p in workdir.iterdir() if p.is_file() and p.suffix not in (".part", ".ytdl")]
+    if not files:
+        raise RuntimeError("yt-dlp finished but no file was downloaded")
+    return max(files, key=lambda p: p.stat().st_size)
 
 
 def safe_name(s):
-    keep = "".join(c if c.isalnum() or c in " -_." else "_" for c in s).strip()
+    keep = "".join(c if c.isalnum() or c in " -_.[]()" else "_" for c in s).strip()
     return (keep or "video")[:80]
 
 
@@ -199,45 +224,56 @@ def resolve_input(item):
     raise RuntimeError(f"file not found (folder doesn't exist): {parent}")
 
 
-def process(item, out_dir: Path, want_video: bool, fresh: bool):
-    kind, target = resolve_input(item)
-    is_file = kind == "file"
-    p = target if is_file else Path()
-    item = target if not is_file else str(target)
-    print(f"\n==> {p.name if is_file else item}")
-    srv = None
+def process_local(src: Path, base: Path, audio_only: bool, fresh: bool):
+    """Send a file on disk to the engine; return the vocals MP3 or a music-free video."""
+    srv, url = serve_file(src)
     try:
-        if is_file:
-            srv, url = serve_file(p.resolve())
-            base = out_dir / p.stem
-        else:
-            url = item
-            parsed = urllib.parse.urlparse(item)
-            base = out_dir / safe_name(f"{parsed.netloc}_{parsed.path.strip('/').replace('/', '_')}")
         job = run_job(url, fresh)
     finally:
-        if srv:
-            srv.shutdown()
-
+        srv.shutdown()
     vocals = get_vocals(job, base.with_name(base.name + ".vocals.mp3"))
-    is_audio = is_file and p.suffix.lower() in AUDIO_EXTS
-    if is_audio or (not is_file and not want_video):
-        print(f"  done -> {vocals}")
+    if audio_only:
         return vocals
+    out = mux(src, vocals, base.with_name(base.name + ".nomusic"))
+    vocals.unlink(missing_ok=True)
+    return out
 
-    if is_file:
-        out = mux(p, vocals, base.with_name(base.name + ".nomusic"))
-    else:
-        work = base.with_name(base.name + ".tmp")
+
+def process(item, out_dir: Path, want_video: bool, fresh: bool, auth: list):
+    kind, target = resolve_input(item)
+
+    if kind == "file":
+        print(f"\n==> {target.name}")
+        out = process_local(target, out_dir / target.stem, target.suffix.lower() in AUDIO_EXTS, fresh)
+
+    elif want_video or auth:
+        # Download the link ourselves (with login cookies if given), then process it like a local file.
+        print(f"\n==> {target}")
+        print("  downloading...")
+        work = out_dir / f".hm-download-{os.getpid()}"
         work.mkdir(exist_ok=True)
         try:
-            print("  downloading video track...")
-            out = mux(fetch_video(url, work), vocals, base.with_name(base.name + ".nomusic"))
+            src = fetch_media(target, work, want_video, auth)
+            out = process_local(src, out_dir / safe_name(src.stem), not want_video, fresh)
         finally:
             shutil.rmtree(work, ignore_errors=True)
-    vocals.unlink(missing_ok=True)
+
+    else:
+        # Let the engine download it (uses its own browser-cookie fallback).
+        print(f"\n==> {target}")
+        parsed = urllib.parse.urlparse(target)
+        base = out_dir / safe_name(f"{parsed.netloc}_{parsed.path.strip('/').replace('/', '_')}")
+        out = get_vocals(run_job(target, fresh), base.with_name(base.name + ".vocals.mp3"))
+
     print(f"  done -> {out}")
     return out
+
+
+LOGIN_HINT = """
+  This site wants you to be logged in. Log in to it in Firefox or Brave, then:
+      hm "<link>" --browser firefox
+  or export a cookies.txt file and use:  --cookies "path\\to\\cookies.txt"
+  (Chrome/Edge can't be read directly; see the README section "Login-only sites".)"""
 
 
 SENDTO_NAME = "HaramMute (remove music)"
@@ -305,6 +341,10 @@ def main():
     ap.add_argument("inputs", nargs="*", help="URLs (any yt-dlp site) and/or local video/audio files")
     ap.add_argument("--out", help="output folder (default: next to the file, or Downloads for URLs)")
     ap.add_argument("--video", action="store_true", help="for URLs: also download the video and output a full music-free video")
+    ap.add_argument("--browser", default=os.environ.get("HM_BROWSER"),
+                    help="for links: use login cookies from this browser (firefox, brave, ...). Default: %%HM_BROWSER%%")
+    ap.add_argument("--cookies", default=os.environ.get("HM_COOKIES"),
+                    help="for links: use login cookies from a cookies.txt file. Default: %%HM_COOKIES%%")
     ap.add_argument("--fresh", action="store_true", help="ignore HaramMute's cache and reprocess")
     ap.add_argument("--install-sendto", action="store_true", help="add a right-click 'Send to' entry (Windows)")
     ap.add_argument("--uninstall-sendto", action="store_true", help="remove the right-click 'Send to' entry")
@@ -324,14 +364,18 @@ def main():
     check_server()
     failed = 0
     for item in a.inputs:
+        kind = None
         try:
             kind, target = resolve_input(item)
             out_dir = Path(a.out) if a.out else (target.parent if kind == "file" else Path.home() / "Downloads")
             out_dir.mkdir(parents=True, exist_ok=True)
-            process(item, out_dir, a.video, a.fresh)
+            process(item, out_dir, a.video, a.fresh, ytdlp_auth(a.cookies, a.browser))
         except (RuntimeError, subprocess.CalledProcessError, urllib.error.URLError) as e:
             failed += 1
-            print(f"  FAILED: {e}")
+            msg = str(e)
+            print(f"  FAILED: {msg}")
+            if kind == "url" and any(w in msg.lower() for w in ("login required", "rate-limit", "--cookies", "authentication", "sign in", "private")):
+                print(LOGIN_HINT)
     sys.exit(1 if failed else 0)
 
 

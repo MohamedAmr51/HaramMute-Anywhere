@@ -3,3 +3,5 @@ __pycache__/
 *.vocals.mp3
 *.nomusic.*
 *.tmp/
+cookies*.txt
+*cookies*.txt
