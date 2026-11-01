@@ -63,7 +63,7 @@ python\python.exe extras\hm.py --install-sendto
 
 Then right-click any video → **Send to** → **HaramMute (remove music)**.
 
-![HaramMute in the right-click Send to menu](docs/send-to.png)
+![HaramMute in the right-click Send to menu](docs/send-to-menu.png)
 
 ### Options
 
