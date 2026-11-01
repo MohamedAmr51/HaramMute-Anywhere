@@ -40,11 +40,11 @@ The installer:
 
 ### Uninstall
 
-```powershell
-powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\HaramMute-Anywhere\uninstall.ps1"
+```
+hm --uninstall
 ```
 
-HaramMute itself is not touched.
+This removes the `hm` command, the Send to entry and the install folder. HaramMute itself is not touched.
 
 ## Usage
 
@@ -82,6 +82,7 @@ Tip: type `hm ` then drag a video into the window to paste its path.
 | `--video` | For links: also download the video and output a full music-free video |
 | `--fresh` | Ignore HaramMute's cache and reprocess |
 | `--install-sendto` / `--uninstall-sendto` | Add or remove the right-click "Send to" entry |
+| `--uninstall` | Remove hm completely |
 | `--version` | Show the version |
 
 ## How it works

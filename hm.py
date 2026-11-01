@@ -29,7 +29,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 HM_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "HaramMute"
 API = os.environ.get("HARAMMUTE_API", "http://127.0.0.1:{}".format(
@@ -282,6 +282,20 @@ def uninstall_sendto():
     print("Removed the Send to entry.")
 
 
+def uninstall_all():
+    """Run uninstall.ps1 in its own window after this process (and hm.cmd) has exited,
+    so the install folder isn't in use when it gets deleted."""
+    script = Path(__file__).resolve().with_name("uninstall.ps1")
+    if not script.exists():
+        sys.exit(f"uninstall.ps1 not found next to {Path(__file__).name}; "
+                 "run: irm https://raw.githubusercontent.com/MohamedAmr51/harammute-anywhere/main/uninstall.ps1 | iex")
+    q = str(script).replace("'", "''")
+    cmd = f"Start-Sleep -Seconds 2; & '{q}'; Read-Host 'Press Enter to close'"
+    subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd],
+                     creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0), close_fds=True)
+    print("Uninstalling in a new window...")
+
+
 def main():
     try:
         sys.stdout.reconfigure(errors="replace")
@@ -294,9 +308,12 @@ def main():
     ap.add_argument("--fresh", action="store_true", help="ignore HaramMute's cache and reprocess")
     ap.add_argument("--install-sendto", action="store_true", help="add a right-click 'Send to' entry (Windows)")
     ap.add_argument("--uninstall-sendto", action="store_true", help="remove the right-click 'Send to' entry")
+    ap.add_argument("--uninstall", action="store_true", help="remove hm completely (command, Send to entry, files)")
     ap.add_argument("--version", action="version", version=f"hm {__version__}")
     a = ap.parse_args()
 
+    if a.uninstall:
+        return uninstall_all()
     if a.install_sendto:
         return install_sendto()
     if a.uninstall_sendto:

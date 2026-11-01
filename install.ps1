@@ -15,66 +15,96 @@ $HmaSourceDir = $PSScriptRoot   # empty when piped through iex -> download from 
     $HmDir = Join-Path $env:LOCALAPPDATA 'HaramMute'
     $Py    = Join-Path $HmDir 'python\python.exe'
     $Dest  = Join-Path $env:LOCALAPPDATA 'HaramMute-Anywhere'
+    $Total = 5
+    $script:step = 0
+
+    function Step([string]$text) {
+        $script:step++
+        Write-Host ("  [{0}/{1}] {2}... " -f $script:step, $Total, $text) -NoNewline
+    }
+    function Ok([string]$note = 'done') { Write-Host $note -ForegroundColor Green }
 
     Write-Host ''
     Write-Host 'HaramMute Anywhere - installer' -ForegroundColor Cyan
+    Write-Host '  Installing, please keep this window open until you see "Done!"' -ForegroundColor Yellow
+    Write-Host ''
 
-    # 1. HaramMute desktop app must be installed (we use its Python, ffmpeg and yt-dlp)
-    if (-not (Test-Path $Py)) {
-        Write-Host "  HaramMute desktop app not found at $HmDir" -ForegroundColor Red
-        Write-Host '  Install it from https://haram-mute.com, then run this installer again.'
+    try {
+        # 1. HaramMute desktop app must be installed (we use its Python, ffmpeg and yt-dlp)
+        Step 'Checking for HaramMute'
+        if (-not (Test-Path $Py)) {
+            Write-Host 'not found' -ForegroundColor Red
+            Write-Host ''
+            Write-Host "  HaramMute desktop app not found at $HmDir" -ForegroundColor Red
+            Write-Host '  Install it from https://haram-mute.com, then run this installer again.'
+            return
+        }
+        Ok 'found'
+
+        # 2. Copy / download files
+        Step $(if ($HmaSourceDir) { 'Copying files' } else { 'Downloading files' })
+        New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+        foreach ($f in 'hm.py', 'uninstall.ps1') {
+            $local = if ($HmaSourceDir) { Join-Path $HmaSourceDir $f } else { $null }
+            if ($local -and (Test-Path $local)) {
+                Copy-Item $local (Join-Path $Dest $f) -Force
+            } else {
+                Invoke-WebRequest "$Repo/$f" -OutFile (Join-Path $Dest $f) -UseBasicParsing
+            }
+        }
+        Ok
+
+        # 3. `hm` command
+        Step "Creating the 'hm' command"
+        Set-Content -Path (Join-Path $Dest 'hm.cmd') -Encoding ASCII -Value "@`"$Py`" `"%~dp0hm.py`" %*"
+        Ok
+
+        # 4. Add to user PATH (read raw value so %VARS% in the user's PATH stay unexpanded)
+        Step 'Adding it to PATH'
+        $key = 'HKCU:\Environment'
+        $cur = (Get-Item $key).GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+        $parts = @($cur -split ';' | Where-Object { $_ })
+        if ($parts -notcontains $Dest) {
+            Set-ItemProperty -Path $key -Name Path -Value ((@($parts) + $Dest) -join ';') -Type ExpandString
+            try {
+                if (-not ('HmaWin32.Native' -as [type])) {
+                    Add-Type -Namespace HmaWin32 -Name Native -MemberDefinition '[DllImport("user32.dll", CharSet=CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr h, uint m, UIntPtr w, string l, uint f, uint t, out UIntPtr r);'
+                }
+                $r = [UIntPtr]::Zero
+                [HmaWin32.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$r) | Out-Null
+            } catch { }
+            Ok
+        } else {
+            Ok 'already there'
+        }
+        if (($env:Path -split ';') -notcontains $Dest) { $env:Path += ";$Dest" }
+
+        # 5. Right-click > Send to (shortcut with HaramMute's icon)
+        Step 'Adding right-click "Send to" entry'
+        $ErrorActionPreference = 'Continue'   # PS 5.1 turns native stderr into errors under 'Stop'
+        $out = & $Py (Join-Path $Dest 'hm.py') --install-sendto 2>&1
+        $code = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+        if ($code -ne 0) { throw "Send to setup failed: $out" }
+        Ok
+    } catch {
+        Write-Host 'failed' -ForegroundColor Red
+        Write-Host ''
+        Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host '  Please report it at https://github.com/MohamedAmr51/harammute-anywhere/issues'
         return
     }
-    Write-Host "  [ok] HaramMute found"
 
-    # 2. Copy / download files
-    New-Item -ItemType Directory -Force -Path $Dest | Out-Null
-    foreach ($f in 'hm.py', 'uninstall.ps1') {
-        $local = if ($HmaSourceDir) { Join-Path $HmaSourceDir $f } else { $null }
-        if ($local -and (Test-Path $local)) {
-            Copy-Item $local (Join-Path $Dest $f) -Force
-        } else {
-            Invoke-WebRequest "$Repo/$f" -OutFile (Join-Path $Dest $f) -UseBasicParsing
-        }
-    }
-    Write-Host "  [ok] Files installed to $Dest"
-
-    # 3. `hm` command
-    Set-Content -Path (Join-Path $Dest 'hm.cmd') -Encoding ASCII -Value "@`"$Py`" `"%~dp0hm.py`" %*"
-
-    # 4. Add to user PATH (read raw value so %VARS% in the user's PATH stay unexpanded)
-    $key = 'HKCU:\Environment'
-    $cur = (Get-Item $key).GetValue('Path', '', 'DoNotExpandEnvironmentNames')
-    $parts = @($cur -split ';' | Where-Object { $_ })
-    if ($parts -notcontains $Dest) {
-        $new = (@($parts) + $Dest) -join ';'
-        Set-ItemProperty -Path $key -Name Path -Value $new -Type ExpandString
-        try {
-            if (-not ('HmaWin32.Native' -as [type])) {
-                Add-Type -Namespace HmaWin32 -Name Native -MemberDefinition '[DllImport("user32.dll", CharSet=CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr h, uint m, UIntPtr w, string l, uint f, uint t, out UIntPtr r);'
-            }
-            $r = [UIntPtr]::Zero
-            [HmaWin32.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$r) | Out-Null
-        } catch { }
-        Write-Host "  [ok] Added 'hm' command to PATH"
-    } else {
-        Write-Host "  [ok] 'hm' command already on PATH"
-    }
-    if (($env:Path -split ';') -notcontains $Dest) { $env:Path += ";$Dest" }
-
-    # 5. Right-click > Send to (shortcut with HaramMute's icon)
-    & $Py (Join-Path $Dest 'hm.py') --install-sendto | ForEach-Object { Write-Host "  [ok] $_" }
-
-    # 6. Old manual install inside HaramMute\extras (from earlier instructions) is no longer needed
     $oldCopy = Join-Path $HmDir 'extras\hm.py'
     if (Test-Path $oldCopy) {
-        Write-Host "  Note: an older copy exists at $oldCopy - you can delete the extras folder."
+        Write-Host ''
+        Write-Host "  Note: an older copy exists in $HmDir\extras - you can delete that folder."
     }
 
     Write-Host ''
     Write-Host 'Done!' -ForegroundColor Green
     Write-Host '  Open a NEW terminal, then:   hm "D:\path\to\video.mp4"'
     Write-Host '  Or right-click a video  >  Send to  >  HaramMute (remove music)'
-    Write-Host "  Uninstall:  powershell -ExecutionPolicy Bypass -File `"$Dest\uninstall.ps1`""
+    Write-Host '  To uninstall later:          hm --uninstall'
     Write-Host ''
 }
