@@ -1,6 +1,6 @@
 # HaramMute Anywhere
 
-Remove background music from **any video** — local files on your PC or links from TikTok, Facebook, X, Instagram, Vimeo and 1000+ other sites — using the engine that ships with the [HaramMute](https://haram-mute.com) desktop app.
+Remove background music from **any video** — local files on your PC or links from TikTok, X, Vimeo and 1000+ other sites — using the engine that ships with the [HaramMute](https://haram-mute.com) desktop app.
 
 The HaramMute browser extension only works on YouTube. The desktop app behind it, though, runs a local server that can process any URL. `hm.py` is a small command-line tool that talks to that server directly, so you can use it on anything.
 
@@ -100,6 +100,7 @@ For local files, `hm.py` briefly serves the file on a random `127.0.0.1` port so
 
 ## Notes
 
+- **Instagram and Facebook aren't supported yet.** They require a logged-in session, which HaramMute can't get from newer Chrome/Edge. Support is planned.
 - **Songs:** the model removes instruments but keeps voices, so a song becomes a cappella, not silence. It works best on speech over background music (lectures, vlogs, reels).
 - **Edge/Chrome cookie warnings in HaramMute's log** are harmless — the engine tries each browser for login cookies before downloading. To skip straight to one that works:
   ```bat
