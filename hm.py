@@ -301,7 +301,7 @@ def main():
         sys.stdout.reconfigure(errors="replace")
     except Exception:
         pass
-    ap = argparse.ArgumentParser(description="Remove music from any URL or local video using the HaramMute engine.")
+    ap = argparse.ArgumentParser(allow_abbrev=False, description="Remove music from any URL or local video using the HaramMute engine.")
     ap.add_argument("inputs", nargs="*", help="URLs (any yt-dlp site) and/or local video/audio files")
     ap.add_argument("--out", help="output folder (default: next to the file, or Downloads for URLs)")
     ap.add_argument("--video", action="store_true", help="for URLs: also download the video and output a full music-free video")
